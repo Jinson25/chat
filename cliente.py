@@ -32,30 +32,39 @@ class ChatGUI:
         self.configurar_conexion()
 
     def configurar_conexion(self):
-        self.ip_servidor = simpledialog.askstring("IP del Servidor", "Ingresa la IP del servidor:")
-        self.puerto_servidor = 5555
+        while True:
+            try:
+                self.ip_servidor = simpledialog.askstring("IP del Servidor", "Ingresa la IP del servidor:")
+                self.puerto_servidor = 5555
 
-        self.socket_cliente = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.socket_cliente.connect((self.ip_servidor, self.puerto_servidor))
+                self.socket_cliente = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                self.socket_cliente.connect((self.ip_servidor, self.puerto_servidor))
 
-        self.nombre = simpledialog.askstring("Nombre", "Ingresa tu nombre:")
-        self.socket_cliente.send(self.nombre.encode())
+                self.nombre = simpledialog.askstring("Nombre", "Ingresa tu nombre:")
+                self.socket_cliente.send(self.nombre.encode())
 
-        self.hilo_envio = threading.Thread(target=self.recibir_mensajes)
-        self.hilo_envio.start()
+                self.hilo_envio = threading.Thread(target=self.recibir_mensajes)
+                self.hilo_envio.start()
+                break  # Sale del bucle si la conexión es exitosa
+            except (socket.error, ConnectionRefusedError):
+                respuesta = messagebox.askretrycancel("Error de conexión", "No se pudo establecer la conexión. ¿Quieres intentar de nuevo?")
+                if not respuesta:
+                    self.master.destroy()
+                    break
 
     def enviar_mensaje(self):
-        mensaje = self.input_entry.get()
-        destinatario = self.users_listbox.get(tk.ACTIVE)
-        if destinatario:
-            self.chat_area.insert(tk.END, f"[Mensaje privado a {destinatario}]: {mensaje}\n")
-            try:
+        try:
+            mensaje = self.input_entry.get()
+            destinatario = self.users_listbox.get(tk.ACTIVE)
+            if destinatario:
+                self.chat_area.insert(tk.END, f"[Mensaje privado a {destinatario}]: {mensaje}\n")
                 self.socket_cliente.send(f"@{destinatario} {mensaje}".encode())
-            except socket.error:
-                self.chat_area.insert(tk.END, "El servidor se ha cerrado o hay un problema de conexión.\n")
-        else:
-            self.chat_area.insert(tk.END, "Selecciona un destinatario para enviar un mensaje privado.\n")
-        self.input_entry.delete(0, tk.END)
+            else:
+                self.chat_area.insert(tk.END, "Selecciona un destinatario para enviar un mensaje privado.\n")
+            self.input_entry.delete(0, tk.END)
+        except socket.error:
+            messagebox.showerror("Error de conexión", "Se perdió la conexión con el servidor.")
+            self.master.destroy()
 
     def recibir_mensajes(self):
         while True:
@@ -69,22 +78,17 @@ class ChatGUI:
                 else:
                     self.chat_area.insert(tk.END, f"{mensaje_recibido}\n")
                     self.chat_area.see(tk.END)
-            except ConnectionResetError:
-                self.chat_area.insert(tk.END, "El servidor se ha cerrado o hay un problema de conexión.\n")
+            except (socket.error, ConnectionResetError):
+                messagebox.showerror("Error de conexión", "Se perdió la conexión con el servidor.")
+                self.master.destroy()
                 break
-
-    def actualizar_lista_usuarios(self, mensaje):
-        lista_usuarios = mensaje.split(":")[1].split(",")
-        self.users_listbox.delete(0, tk.END)
-        for usuario in lista_usuarios:
-            self.users_listbox.insert(tk.END, usuario)
 
     def actualizar_usuarios(self):
         try:
             self.socket_cliente.send("#lista_clientes".encode())
         except socket.error:
-            self.chat_area.insert(tk.END, "El servidor se ha cerrado o hay un problema de conexión.\n")
-
+            messagebox.showerror("Error de conexión", "Se perdió la conexión con el servidor.")
+            self.master.destroy()
 def main():
     root = tk.Tk()
     app = ChatGUI(root)
